@@ -261,7 +261,7 @@
     }
     if (block) {
       let text = (block.textContent || "").trim();
-      if (text.length > 500) text = text.substring(0, 500) + "\u2026";
+      if (text.length > 300) text = text.substring(0, 300) + "\u2026";
       ctx.surroundingText = text;
     }
 

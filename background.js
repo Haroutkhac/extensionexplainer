@@ -8,7 +8,7 @@ const DEFAULT_SETTINGS = {
   model: "claude-sonnet-4-20250514",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "llama3.2",
-  maxTokens: 500,
+  maxTokens: 150,
   temperature: 0.3,
 };
 
@@ -38,43 +38,20 @@ async function saveKnowledgeProfile(profile) {
 
 function buildKnowledgeContext(profile) {
   const entries = Object.entries(profile);
-  if (entries.length === 0) {
-    return "The user has not looked up any topics yet. Assume they are a general audience reader.";
-  }
+  if (entries.length === 0) return "";
 
-  // Group topics by confidence band
-  const familiar = []; // confidence >= 0.5
-  const learning = []; // 0.2 <= confidence < 0.5
-  const novice = [];   // confidence < 0.2
+  // Only include the 10 most recent topics to keep context small
+  const recent = entries
+    .sort((a, b) => (b[1].lastSeen || "").localeCompare(a[1].lastSeen || ""))
+    .slice(0, 10);
 
-  for (const [topic, data] of entries) {
-    if (data.confidence >= 0.5) {
-      familiar.push(topic);
-    } else if (data.confidence >= 0.2) {
-      learning.push(topic);
-    } else {
-      novice.push(topic);
-    }
-  }
+  const familiar = recent.filter(([, d]) => d.confidence >= 0.5).map(([t]) => t);
+  const learning = recent.filter(([, d]) => d.confidence >= 0.2 && d.confidence < 0.5).map(([t]) => t);
 
   const parts = [];
-  if (familiar.length > 0) {
-    parts.push(
-      `The user is fairly familiar with: ${familiar.join(", ")}. You can use these terms without much explanation.`
-    );
-  }
-  if (learning.length > 0) {
-    parts.push(
-      `The user is currently learning about: ${learning.join(", ")}. Give brief clarifications when referencing these.`
-    );
-  }
-  if (novice.length > 0) {
-    parts.push(
-      `The user is new to: ${novice.join(", ")}. Explain these from scratch when relevant.`
-    );
-  }
-
-  return parts.join("\n");
+  if (familiar.length > 0) parts.push(`Knows: ${familiar.join(", ")}`);
+  if (learning.length > 0) parts.push(`Learning: ${learning.join(", ")}`);
+  return parts.length > 0 ? `\nUser profile: ${parts.join(". ")}` : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -82,18 +59,9 @@ function buildKnowledgeContext(profile) {
 // ---------------------------------------------------------------------------
 
 function buildSystemPrompt(knowledgeContext) {
-  return `You are a concise, contextual explainer. The user highlighted text on a web page and wants a quick explanation so they can keep reading without going down a rabbit hole.
+  return `You explain highlighted text so the user can keep reading the page they're on. Answer ONLY what's needed to understand this term in this specific context — nothing more.
 
-Rules:
-- Lead with a 1-2 sentence explanation of what the highlighted text means IN THE CONTEXT of the page
-- If helpful, add a brief "Why it matters here:" line
-- Include 1-2 markdown links for deeper reading (Wikipedia, MDN, official docs, etc) when relevant
-- Keep total response under 100 words for simple concepts, under 200 for complex ones
-- Use bold for key terms, but keep formatting minimal
-- Never start with "Sure!" or "Great question!" - just explain directly
-- Adjust depth based on the user's knowledge profile
-
-${knowledgeContext}`;
+1-3 sentences max. No greetings, no filler, no "Why it matters" sections. If the surrounding text already implies something, don't repeat it. Skip links unless the user asks.${knowledgeContext}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,22 +69,24 @@ ${knowledgeContext}`;
 // ---------------------------------------------------------------------------
 
 function buildUserMessage(selectedText, pageContext) {
-  let message = `Explain this highlighted text: "${selectedText}"`;
+  // Keep the user message lean — only include what helps the LLM
+  // understand the context. URL and meta description are noise.
+  let message = `"${selectedText}"`;
 
   if (pageContext) {
     const ctx = [];
-    if (pageContext.title) ctx.push(`Page title: ${pageContext.title}`);
-    if (pageContext.url) ctx.push(`URL: ${pageContext.url}`);
-    if (pageContext.metaDescription)
-      ctx.push(`Page description: ${pageContext.metaDescription}`);
+    if (pageContext.title) ctx.push(`Page: ${pageContext.title}`);
     if (pageContext.headings && pageContext.headings.length > 0)
-      ctx.push(`Nearby headings: ${pageContext.headings.join(" > ")}`);
-    if (pageContext.surroundingText)
-      ctx.push(`Surrounding paragraph: ${pageContext.surroundingText}`);
-
-    if (ctx.length > 0) {
-      message += `\n\nPage context:\n${ctx.join("\n")}`;
+      ctx.push(`Section: ${pageContext.headings.slice(-2).join(" > ")}`);
+    if (pageContext.surroundingText) {
+      // Limit to 300 chars to reduce input tokens
+      let surrounding = pageContext.surroundingText;
+      if (surrounding.length > 300) {
+        surrounding = surrounding.substring(0, 300).trimEnd() + "\u2026";
+      }
+      ctx.push(`Around it: ${surrounding}`);
     }
+    if (ctx.length > 0) message += `\n${ctx.join("\n")}`;
   }
 
   return message;
@@ -166,7 +136,9 @@ async function streamClaude(settings, systemPrompt, messages, port) {
     max_tokens: settings.maxTokens,
     temperature: settings.temperature,
     stream: true,
-    system: systemPrompt,
+    // Use structured system prompt with cache_control for prompt caching.
+    // The system prompt is stable across requests, so caching saves input tokens.
+    system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
     messages,
   };
 
@@ -387,17 +359,8 @@ async function handleRequest(msg, port) {
     if (Array.isArray(msg.conversationHistory) && msg.conversationHistory.length > 0) {
       messages = [...msg.conversationHistory];
     }
-    // Append the new follow-up message with page context for grounding
-    let followupContent = msg.message;
-    if (msg.pageContext) {
-      const ctx = [];
-      if (msg.pageContext.title) ctx.push(`Page: ${msg.pageContext.title}`);
-      if (msg.pageContext.url) ctx.push(`URL: ${msg.pageContext.url}`);
-      if (ctx.length > 0) {
-        followupContent += `\n\n(Context: ${ctx.join(", ")})`;
-      }
-    }
-    messages.push({ role: "user", content: followupContent });
+    // Follow-ups don't need page context again — it's in the conversation history
+    messages.push({ role: "user", content: msg.message });
   }
 
   // Dispatch to the appropriate provider

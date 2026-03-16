@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     model: 'claude-sonnet-4-20250514',
     ollamaUrl: 'http://localhost:11434',
     ollamaModel: 'llama3.2',
-    maxTokens: 500,
+    maxTokens: 150,
     temperature: 0.3
   };
 
