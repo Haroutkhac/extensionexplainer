@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extension Explainer - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-header">
+      <span class="header-icon">📖</span>
+      <div>
+        <h1>Extension Explainer</h1>
+        <p class="subtitle">Settings</p>
+      </div>
+    </header>
+
+    <!-- Section 1: Provider & API Key -->
+    <section class="card">
+      <h2 class="section-title">Provider &amp; API Key</h2>
+
+      <div class="field-group">
+        <label for="provider">AI Provider</label>
+        <select id="provider">
+          <option value="claude">Claude</option>
+          <option value="ollama">Ollama</option>
+        </select>
+      </div>
+
+      <div id="claude-fields">
+        <div class="field-group">
+          <label for="api-key">API Key</label>
+          <div class="input-wrapper">
+            <input type="password" id="api-key" placeholder="Enter your Claude API key">
+            <button type="button" id="toggle-key" class="toggle-btn" title="Show/hide API key">
+              <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+          <p class="field-hint">Your API key is stored locally and never shared.</p>
+        </div>
+
+        <div class="field-group">
+          <label for="model">Model</label>
+          <input type="text" id="model" placeholder="claude-sonnet-4-20250514">
+        </div>
+      </div>
+
+      <div id="ollama-fields" style="display:none;">
+        <div class="field-group">
+          <label for="ollama-url">Ollama URL</label>
+          <input type="text" id="ollama-url" placeholder="http://localhost:11434">
+        </div>
+
+        <div class="field-group">
+          <label for="ollama-model">Ollama Model</label>
+          <input type="text" id="ollama-model" placeholder="llama3.2">
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Response Settings -->
+    <section class="card">
+      <h2 class="section-title">Response Settings</h2>
+
+      <div class="field-group">
+        <label for="max-tokens">
+          Max Tokens
+          <span class="range-value" id="max-tokens-value">500</span>
+        </label>
+        <input type="range" id="max-tokens" min="100" max="1000" step="50" value="500">
+        <div class="range-labels">
+          <span>100</span>
+          <span>1000</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="temperature">
+          Temperature
+          <span class="range-value" id="temperature-value">0.3</span>
+        </label>
+        <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
+        <div class="range-labels">
+          <span>0 (Precise)</span>
+          <span>1 (Creative)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Knowledge Profile -->
+    <section class="card">
+      <h2 class="section-title">Knowledge Profile</h2>
+
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-value" id="topic-count">0</span>
+          <span class="stat-label">Topics Tracked</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="lookup-count">0</span>
+          <span class="stat-label">Total Lookups</span>
+        </div>
+      </div>
+
+      <div id="topics-list" class="topics-list">
+        <p class="empty-state">No topics tracked yet.</p>
+      </div>
+
+      <button id="clear-profile" class="btn btn-danger">Clear Knowledge Profile</button>
+    </section>
+
+    <!-- Save -->
+    <div class="save-section">
+      <button id="save-btn" class="btn btn-primary">Save Settings</button>
+      <div id="save-message" class="save-message"></div>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
