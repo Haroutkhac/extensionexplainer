@@ -144,6 +144,20 @@
 }
 .ee-send-btn:hover { background: #1d4ed8; }
 .ee-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ee-more-btn {
+  background: none; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 12px;
+  font-size: 12px; font-family: inherit; color: #6b7280; cursor: pointer;
+  transition: border-color 100ms ease, color 100ms ease; margin-top: 6px; display: inline-flex; align-items: center; gap: 4px;
+}
+.ee-more-btn:hover { border-color: #2563eb; color: #2563eb; }
+.ee-more-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ee-more-btn kbd {
+  font-size: 10px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 3px;
+  padding: 0 4px; font-family: inherit; line-height: 1.6;
+}
+.ee-panel.dark .ee-more-btn { border-color: #4b5563; color: #9ca3af; }
+.ee-panel.dark .ee-more-btn:hover { border-color: #60a5fa; color: #60a5fa; }
+.ee-panel.dark .ee-more-btn kbd { background: #374151; border-color: #4b5563; }
 `;
   shadow.appendChild(styleEl);
 
@@ -354,8 +368,54 @@
     streamBuffer = "";
     inputEl.disabled = false;
     sendBtn.disabled = false;
+    // Add "More" button after each AI response
+    addMoreButton();
     inputEl.focus();
     scrollToBottom();
+  }
+
+  function addMoreButton() {
+    // Remove any existing More button
+    const old = messagesEl.querySelector(".ee-more-btn");
+    if (old) old.remove();
+    const btn = document.createElement("button");
+    btn.className = "ee-more-btn";
+    btn.innerHTML = 'More <kbd>Tab</kbd>';
+    btn.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+    btn.addEventListener("click", (e) => { e.stopPropagation(); triggerMore(); });
+    messagesEl.appendChild(btn);
+  }
+
+  function triggerMore() {
+    if (isLoading) return;
+    // Remove the More button
+    const btn = messagesEl.querySelector(".ee-more-btn");
+    if (btn) btn.remove();
+    // Send "Elaborate further" as a follow-up (no visible user bubble — feels like a continuation)
+    const divider = document.createElement("div");
+    divider.className = "ee-divider";
+    messagesEl.appendChild(divider);
+
+    conversationHistory.push({ role: "user", content: "Elaborate further." });
+
+    typingIndicator = createTypingIndicator();
+    messagesEl.appendChild(typingIndicator);
+    scrollToBottom();
+
+    isLoading = true;
+    streamBuffer = "";
+    activeStreamEl = null;
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+
+    const p = ensurePort();
+    if (!p) { onError("Could not connect to extension. Try reloading the page."); return; }
+    p.postMessage({
+      action: "followup",
+      message: "Elaborate further.",
+      conversationHistory: conversationHistory.slice(0, -1),
+      pageContext,
+    });
   }
 
   function onError(message) {
@@ -536,12 +596,18 @@
   document.addEventListener("mousedown", (e) => {
     if (host.contains(e.target) || e.target === host) return;
     hideExplainBtn();
+    // Click outside the panel dismisses it
+    if (isPanelOpen()) hidePanel();
   }, { passive: true });
 
   document.addEventListener("scroll", () => { hideExplainBtn(); }, { passive: true });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isPanelOpen()) hidePanel();
+    if (e.key === "Tab" && isPanelOpen() && !isLoading) {
+      e.preventDefault();
+      triggerMore();
+    }
   });
 
   document.addEventListener("selectionchange", () => {
